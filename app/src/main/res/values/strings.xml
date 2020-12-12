@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">ImgDownloadReceiver</string>
     <string name="path_will_be_here">The path will be here</string>
+    <string name="bind_and_load">Bind and Load</string>
 </resources>
