@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ImgDownloadReceiver</string>
+    <string name="path_will_be_here">The path will be here</string>
+</resources>
