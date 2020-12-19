@@ -2,82 +2,100 @@ package com.example.imgdownloadreceiver
 
 import android.content.*
 import android.os.*
+import android.util.Log
 import android.view.View
+import android.webkit.URLUtil
 import android.widget.Button
+import android.widget.EditText
+import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var imageReceiver: ImageReceiver
+    private lateinit var startDownloadBtn: Button
+    private lateinit var spinner: ProgressBar
+    private lateinit var urlInput: EditText
+    private lateinit var pathOutput: TextView
 
-    private var mService: Messenger? = null
-    private var bound = false
+    private var serviceMessengerInstance: Messenger? = null
+    private val clientMessengerInstance = Messenger(ResponseHandler())
 
-    private val mConnection = object : ServiceConnection {
+    private var isBound = false
 
-        override fun onServiceConnected(className: ComponentName, service: IBinder) {
-            mService = Messenger(service)
-            bound = true
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceDisconnected(name: ComponentName?) {
+            serviceMessengerInstance = null
+            isBound = false
         }
 
-        override fun onServiceDisconnected(className: ComponentName) {
-            mService = null
-            bound = false
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            Log.i("qwer", "bound")
+            serviceMessengerInstance = Messenger(service)
+            isBound = true
         }
-    }
-
-    fun sayHello(v: View) {
-        if (!bound) return
-        val msg = Message.obtain(null, 17, 0, 0)
-        msg.obj = "wooo"
-        try {
-            mService?.send(msg)
-        } catch (e: RemoteException) {
-            e.printStackTrace()
-        }
-
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val bindAndLoadBtn = findViewById<Button>(R.id.bind_and_load_btn)
-        bindAndLoadBtn.setOnClickListener { view ->
-            sayHello(view)
+        startDownloadBtn = findViewById(R.id.load_btn)
+        urlInput = findViewById(R.id.url_input)
+        pathOutput = findViewById(R.id.path_output)
+        spinner = findViewById(R.id.progress_bar)
+
+        startDownloadBtn.setOnClickListener {
+            val urlToLoad = urlInput.text.toString()
+
+            if (!isBound || !URLUtil.isValidUrl(urlToLoad)) {
+                return@setOnClickListener
+            }
+
+            val msg: Message = Message.obtain(null, Constants.DOWNLOAD_REQUEST.ordinal, urlToLoad)
+            msg.replyTo = clientMessengerInstance
+            try {
+                serviceMessengerInstance?.send(msg)
+
+                startDownloadBtn.visibility = View.INVISIBLE
+                urlInput.visibility = View.INVISIBLE
+                spinner.visibility = View.VISIBLE
+            } catch (e: RemoteException) {
+                e.printStackTrace()
+            }
         }
     }
 
     override fun onStart() {
         super.onStart()
-        // Bind to the service
-        val connectionIntent = Intent()
-        connectionIntent.component = ComponentName("com.example.imgdownload", "com.example.imgdownload.LoaderService")
-        bindService(connectionIntent, mConnection, Context.BIND_AUTO_CREATE)
+        val intent = Intent()
+        intent.component = ComponentName("com.example.imgdownload", "com.example.imgdownload.LoaderService")
+        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
     override fun onStop() {
         super.onStop()
-        // Unbind from the service
-        if (bound) {
-            unbindService(mConnection)
-            bound = false
+        if (isBound) {
+            unbindService(serviceConnection)
+            isBound = false
         }
     }
 
+    inner class ResponseHandler: Handler() {
 
+        override fun handleMessage(msg: Message) {
 
+            when (msg.what) {
+                Constants.DOWNLOAD_RESPONSE.ordinal -> {
+                    spinner.visibility = View.GONE
+                    urlInput.visibility = View.VISIBLE
+                    startDownloadBtn.visibility = View.VISIBLE
 
-//    override fun onCreate(savedInstanceState: Bundle?) {
-//        super.onCreate(savedInstanceState)
-//        setContentView(R.layout.activity_main)
-//        imageReceiver = ImageReceiver(findViewById(R.id.path_to_img))
-//        val filter = IntentFilter(Constants.LOADING_SUCCESS_ACTION.name)
-//        registerReceiver(imageReceiver, filter)
-//    }
-//
-//    override fun onDestroy() {
-//        super.onDestroy()
-//        unregisterReceiver(imageReceiver)
-//    }
+                    pathOutput.text = msg.obj.toString()
+                }
+                else ->
+                    super.handleMessage(msg)
+            }
+        }
+    }
 }
